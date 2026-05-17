@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getConfiguredAiProvider, logAiProviderSelection, requestAiJson } from "@/lib/ai-provider";
 
 type CheckGuidePayload = {
   questionCount?: number;
@@ -14,53 +15,25 @@ type CheckGuidePayload = {
 export async function POST(request: Request) {
   const payload = (await request.json()) as CheckGuidePayload;
   const language = payload.language ?? "en";
+  const provider = getConfiguredAiProvider();
+  logAiProviderSelection("check-guide");
 
-  if (!process.env.GOOGLE_API_KEY && !process.env.GEMINI_AUTH_TOKEN) {
+  if (provider.name === "fallback") {
     return NextResponse.json({ question: fallbackQuestion(payload, language), source: "fallback" });
   }
 
   try {
-    const model = process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite-preview";
-    const url = `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY}`;
-    const response = await fetch(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: buildPrompt(payload, language),
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.25,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      return NextResponse.json({ question: fallbackQuestion(payload, language), source: "fallback" });
-    }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsed = parseJson(text);
+    const aiResponse = await requestAiJson({
+      prompt: buildPrompt(payload, language),
+      temperature: 0.25,
+    });
+    const parsed = parseJson(aiResponse?.text);
     const question = typeof parsed?.question === "string" ? parsed.question : fallbackQuestion(payload, language);
 
     return NextResponse.json({
       question,
       rationale: typeof parsed?.rationale === "string" ? parsed.rationale : undefined,
-      source: "gemini",
+      source: aiResponse?.provider ?? provider.name,
     });
   } catch {
     return NextResponse.json({ question: fallbackQuestion(payload, language), source: "fallback" });

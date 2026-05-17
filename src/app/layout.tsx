@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@copilotkit/react-ui/styles.css";
+import { AtriumCopilotProvider } from "@/components/AtriumCopilotProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AtriumCopilotProvider>{children}</AtriumCopilotProvider>
+      </body>
     </html>
   );
 }

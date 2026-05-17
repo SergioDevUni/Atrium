@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "video": "remotion studio src/remotion/index.ts",
+    "video:still": "remotion still src/remotion/index.ts AtriumPresentation --scale=0.25 --frame=210",
+    "video:render": "remotion render src/remotion/index.ts AtriumPresentation out/atrium-presentation.mp4",
     "start": "next start",
     "lint": "eslint ."
   },
@@ -14,11 +17,13 @@
     "@copilotkit/runtime": "latest",
     "@react-three/drei": "latest",
     "@react-three/fiber": "latest",
+    "@remotion/cli": "^4.0.459",
     "hono": "latest",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "remotion": "^4.0.459",
     "three": "latest"
   },
   "devDependencies": {

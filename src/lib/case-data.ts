@@ -16,6 +16,7 @@ export function createInitialCase(language: Language): CaseGraph {
         ? "Synthetic case: abdominal pain after dinner"
         : "Caso sintético: dolor abdominal después de cenar",
     bodyRegions: [{ region: "abdomen", label: regionLabels[language].abdomen, severity: 5 }],
+    bodyFindings: [],
     symptoms: [
       {
         id: "sym-abdomen-pain",

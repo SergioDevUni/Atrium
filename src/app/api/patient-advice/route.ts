@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getConfiguredAiProvider, logAiProviderSelection, requestAiJson } from "@/lib/ai-provider";
 
 type AssessmentInput = {
   language?: "en" | "es";
@@ -18,40 +19,19 @@ export async function POST(request: Request) {
   const payload = (await request.json()) as AssessmentInput;
   const language = payload.language ?? "en";
   const fallback = fallbackAdvice(payload, language);
+  const provider = getConfiguredAiProvider();
+  logAiProviderSelection("patient-advice");
 
-  if (!process.env.GOOGLE_API_KEY && !process.env.GEMINI_API_KEY) {
+  if (provider.name === "fallback") {
     return NextResponse.json(fallback);
   }
 
   try {
-    const model = process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite-preview";
-    const response = await fetch(
-      `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: buildPrompt(payload, language) }],
-            },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.35,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      return NextResponse.json(fallback);
-    }
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const parsed = normalizeAdvice(parseJson(text));
+    const aiResponse = await requestAiJson({
+      prompt: buildPrompt(payload, language),
+      temperature: 0.35,
+    });
+    const parsed = normalizeAdvice(parseJson(aiResponse?.text), aiResponse?.provider ?? provider.name);
     return NextResponse.json(parsed ?? fallback);
   } catch {
     return NextResponse.json(fallback);
@@ -102,11 +82,11 @@ function parseJson(value: unknown) {
   }
 }
 
-function normalizeAdvice(value: unknown) {
+function normalizeAdvice(value: unknown, source: "google" | "openrouter") {
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
   return {
-    source: "patient-advice-agent",
+    source,
     friendlyTitle: stringOr(record.friendlyTitle, "Primary assessment"),
     patientMessage: stringOr(record.patientMessage, "This pattern can fit the assessment shown here. Use the next steps to track changes and decide what to do next."),
     reassurance: stringOr(record.reassurance, "Most checks like this are about organizing information clearly, not creating alarm."),

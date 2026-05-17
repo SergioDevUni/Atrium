@@ -1,4 +1,14 @@
 import { regionLabels } from "./i18n";
+import {
+  HARD_QUESTION_LIMIT,
+  MIN_QUESTION_LIMIT,
+  SOFT_QUESTION_LIMIT,
+  createInitialQuestionLedger,
+  markCurrentQuestionAnswered,
+  chooseNextQuestionSlot,
+  isGreetingOnlyInput,
+  questionSpecForSlot,
+} from "./intake-guardrails";
 import { detectRedFlags, highestSafetyLevel } from "./safety";
 import type { BodyRegion, CaseGraph, Language, Symptom } from "./types";
 
@@ -10,24 +20,33 @@ type AgentResult = {
 const regionHints: Array<{ region: BodyRegion; pattern: RegExp }> = [
   { region: "head", pattern: /head|headache|migraine|vision|cabeza|migraña|visión/i },
   { region: "chest", pattern: /chest|breath|heart|pecho|respirar|aire|coraz[oó]n/i },
-  { region: "abdomen", pattern: /stomach|abdomen|belly|vomit|diarrhea|est[oó]mago|abdominal|v[oó]mito|diarrea/i },
+  { region: "abdomen", pattern: /stom(?:ach|atch|ache|ac)|tummy|abdomen|belly|vomit|diarrhea|est[oó]mago|barriga|panza|abdominal|v[oó]mito|diarrea/i },
   { region: "back", pattern: /back|spine|espalda|columna/i },
+  { region: "leftHand", pattern: /left hand|left wrist|left finger|left palm|mano izquierda|muñeca izquierda|dedo izquierdo|palma izquierda/i },
+  { region: "rightHand", pattern: /right hand|right wrist|right finger|right palm|mano derecha|muñeca derecha|dedo derecho|palma derecha/i },
   { region: "leftArm", pattern: /left arm|brazo izquierdo/i },
   { region: "rightArm", pattern: /right arm|brazo derecho/i },
+  { region: "leftFoot", pattern: /left foot|left ankle|left toe|pie izquierdo|tobillo izquierdo|dedo del pie izquierdo/i },
+  { region: "rightFoot", pattern: /right foot|right ankle|right toe|pie derecho|tobillo derecho|dedo del pie derecho/i },
   { region: "leftLeg", pattern: /left leg|pierna izquierda/i },
   { region: "rightLeg", pattern: /right leg|pierna derecha/i },
 ];
 
 export function startAdaptiveCheck(language: Language): CaseGraph {
+  const currentQuestion =
+    language === "en"
+      ? "What are you most concerned about today? Use one natural sentence."
+      : "¿Qué es lo que más te preocupa hoy? Usa una frase natural.";
+
   return {
     mode: "demo",
     language,
     checkStatus: "active",
     questionCount: 0,
-    currentQuestion:
-      language === "en"
-        ? "What are you most concerned about today? Use one natural sentence."
-        : "¿Qué es lo que más te preocupa hoy? Usa una frase natural.",
+    currentQuestion,
+    currentQuestionSlot: "chief_concern",
+    questionLedger: createInitialQuestionLedger(language, currentQuestion),
+    scopeState: { offTopicCount: 0, boundaryCount: 0 },
     scenarioTitle: language === "en" ? "New adaptive check" : "Nuevo chequeo adaptativo",
     chiefConcern: language === "en" ? "New adaptive check" : "Nuevo chequeo adaptativo",
     userNarrative: "",
@@ -35,6 +54,7 @@ export function startAdaptiveCheck(language: Language): CaseGraph {
     medications: [],
     allergies: [],
     bodyRegions: [],
+    bodyFindings: [],
     symptoms: [],
     timeline: [],
     relevantPositives: [],
@@ -60,47 +80,65 @@ export function startAdaptiveCheck(language: Language): CaseGraph {
 }
 
 export function applyAdaptiveAnswer(caseGraph: CaseGraph, answer: string): AgentResult {
-  const language = caseGraph.language;
-  const region = inferRegion(answer) ?? caseGraph.bodyRegions[0]?.region;
+  if (isGreetingOnlyInput(answer)) {
+    return { caseGraph };
+  }
+
+  const answeredGraph = markCurrentQuestionAnswered(caseGraph, answer);
+  const language = answeredGraph.language;
+  const region = inferRegion(answer) ?? answeredGraph.bodyRegions[0]?.region;
   const severity = inferSeverity(answer);
   const duration = inferDuration(answer);
   const newSymptom = buildSymptom(answer, language, region, severity, duration);
-  const medicalHistory = mergeFacts(caseGraph.medicalHistory, extractMedicalHistory(answer, language));
-  const medications = mergeFacts(caseGraph.medications, extractMedications(answer, language));
-  const allergies = mergeFacts(caseGraph.allergies, extractAllergies(answer, language));
+  const medicalHistory = mergeFacts(answeredGraph.medicalHistory, extractMedicalHistory(answer, language));
+  const medications = mergeFacts(answeredGraph.medications, extractMedications(answer, language));
+  const allergies = mergeFacts(answeredGraph.allergies, extractAllergies(answer, language));
 
   const nextBase: CaseGraph = {
-    ...caseGraph,
+    ...answeredGraph,
     checkStatus: "active",
-    questionCount: (caseGraph.questionCount ?? 0) + 1,
+    questionCount: (answeredGraph.questionCount ?? 0) + 1,
     chiefConcern:
-      caseGraph.userNarrative || (caseGraph.questionCount ?? 0) === 0
+      answeredGraph.userNarrative || (answeredGraph.questionCount ?? 0) === 0
         ? answer.slice(0, 120)
-        : caseGraph.chiefConcern,
-    userNarrative: [caseGraph.userNarrative, answer].filter(Boolean).join("\n"),
+        : answeredGraph.chiefConcern,
+    userNarrative: [answeredGraph.userNarrative, answer].filter(Boolean).join("\n"),
     medicalHistory,
     medications,
     allergies,
     bodyRegions: region
-      ? mergeRegion(caseGraph.bodyRegions, region, regionLabels[language][region], severity)
-      : caseGraph.bodyRegions,
-    symptoms: newSymptom ? [...caseGraph.symptoms, newSymptom] : caseGraph.symptoms,
+      ? mergeRegion(answeredGraph.bodyRegions, region, regionLabels[language][region], severity)
+      : answeredGraph.bodyRegions,
+    symptoms: newSymptom ? [...answeredGraph.symptoms, newSymptom] : answeredGraph.symptoms,
     timeline: [
-      ...caseGraph.timeline,
+      ...answeredGraph.timeline,
       {
         id: `adaptive-${Date.now()}`,
-        time: language === "en" ? `Answer ${(caseGraph.questionCount ?? 0) + 1}` : `Respuesta ${(caseGraph.questionCount ?? 0) + 1}`,
+        time: language === "en" ? `Answer ${(answeredGraph.questionCount ?? 0) + 1}` : `Respuesta ${(answeredGraph.questionCount ?? 0) + 1}`,
         label: answer,
       },
     ],
-    relevantPositives: mergeFacts(caseGraph.relevantPositives, extractPositives(answer, language)),
-    relevantNegatives: mergeFacts(caseGraph.relevantNegatives, extractNegatives(answer, language)),
+    relevantPositives: mergeFacts(answeredGraph.relevantPositives, extractPositives(answer, language)),
+    relevantNegatives: mergeFacts(answeredGraph.relevantNegatives, extractNegatives(answer, language)),
   };
 
   const redFlags = detectRedFlags(nextBase, answer);
   const missingInfo = computeMissingInfo(nextBase, language);
   const safetyLevel = highestSafetyLevel(redFlags);
-  const ready = safetyLevel !== "none" || missingInfo.length === 0 || (nextBase.questionCount ?? 0) >= 4;
+  const nextWithSignals = { ...nextBase, redFlags, missingInfo };
+  const nextSlot = chooseNextQuestionSlot(nextWithSignals, answer);
+  const answeredCount = nextBase.questionCount ?? 0;
+  const emergencyReady = safetyLevel === "emergency";
+  const normalReady =
+    answeredCount >= MIN_QUESTION_LIMIT &&
+    (safetyLevel !== "none" ||
+      missingInfo.length === 0 ||
+      nextSlot === "review" ||
+      answeredCount >= SOFT_QUESTION_LIMIT);
+  const ready = emergencyReady || normalReady || answeredCount >= HARD_QUESTION_LIMIT;
+  const nextQuestion = ready
+    ? reviewReadyText(language, safetyLevel)
+    : questionSpecForSlot(nextSlot, language, { answer }).nextQuestion;
 
   return {
     caseGraph: {
@@ -108,17 +146,18 @@ export function applyAdaptiveAnswer(caseGraph: CaseGraph, answer: string): Agent
       redFlags,
       missingInfo,
       checkStatus: ready ? "review-ready" : "active",
-      currentQuestion: ready ? reviewReadyText(language, safetyLevel) : chooseNextQuestion(nextBase, missingInfo, language),
+      currentQuestion: nextQuestion,
+      currentQuestionSlot: ready ? "review" : nextSlot,
     },
     highlightedRegion: region,
   };
 }
 
-function inferRegion(text: string): BodyRegion | undefined {
+export function inferRegion(text: string): BodyRegion | undefined {
   return regionHints.find((hint) => hint.pattern.test(text))?.region;
 }
 
-function inferSeverity(text: string): Symptom["severity"] | undefined {
+export function inferSeverity(text: string): Symptom["severity"] | undefined {
   const numeric = text.match(/\b(10|[1-9])\s*(?:\/\s*10|out of 10|de 10)?\b/i)?.[1];
   if (numeric) return Number(numeric) as Symptom["severity"];
   if (/severe|worst|intense|very bad|severo|fuerte|intenso/i.test(text)) return 8;
@@ -138,7 +177,7 @@ function buildSymptom(
   severity?: Symptom["severity"],
   duration?: string,
 ): Symptom | undefined {
-  if (!region && !/pain|fever|breath|vomit|diarrhea|dolor|fiebre|aire|v[oó]mito|diarrea/i.test(answer)) {
+  if (!region && !/pain|fever|breath|vomit|diarrhea|stom(?:ach|atch|ache|ac)|tummy|abdomen|belly|dolor|fiebre|aire|v[oó]mito|diarrea|est[oó]mago|barriga|panza/i.test(answer)) {
     return undefined;
   }
 

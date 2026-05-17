@@ -1,4 +1,5 @@
 import type { BodyRegion, CaseGraph, Language } from "./types";
+import { regionLabels } from "./i18n";
 
 type ScenarioCopy = {
   title: string;
@@ -317,6 +318,7 @@ export function scenarioToCaseGraph(scenario: TeachingScenario, language: Langua
     medications: [],
     allergies: [],
     bodyRegions: [{ region: scenario.primaryRegion, label: copyForRegion(scenario.primaryRegion, language), severity: copy.symptoms[0]?.severity }],
+    bodyFindings: [],
     symptoms: copy.symptoms.map((symptom, index) => ({
       ...symptom,
       id: `${scenario.id}-symptom-${index}`,
@@ -335,28 +337,5 @@ export function scenarioToCaseGraph(scenario: TeachingScenario, language: Langua
 }
 
 function copyForRegion(region: BodyRegion, language: Language) {
-  const labels: Record<Language, Record<BodyRegion, string>> = {
-    en: {
-      head: "Head",
-      chest: "Chest",
-      abdomen: "Abdomen",
-      back: "Back",
-      leftArm: "Left arm",
-      rightArm: "Right arm",
-      leftLeg: "Left leg",
-      rightLeg: "Right leg",
-    },
-    es: {
-      head: "Cabeza",
-      chest: "Pecho",
-      abdomen: "Abdomen",
-      back: "Espalda",
-      leftArm: "Brazo izquierdo",
-      rightArm: "Brazo derecho",
-      leftLeg: "Pierna izquierda",
-      rightLeg: "Pierna derecha",
-    },
-  };
-
-  return labels[language][region];
+  return regionLabels[language][region];
 }

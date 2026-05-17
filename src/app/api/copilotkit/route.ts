@@ -1,8 +1,21 @@
 import {
   CopilotRuntime,
+  EmptyAdapter,
   GoogleGenerativeAIAdapter,
+  OpenAIAdapter,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
+import OpenAI from "openai";
+import {
+  getConfiguredAiProvider,
+  getGoogleStudioApiKey,
+  getGoogleStudioModel,
+  getOpenRouterBaseUrl,
+  getOpenRouterApiKey,
+  getOpenRouterClientHeaders,
+  getOpenRouterModel,
+  logAiProviderSelection,
+} from "@/lib/ai-provider";
 
 const runtime = new CopilotRuntime({
   a2ui: {
@@ -10,11 +23,26 @@ const runtime = new CopilotRuntime({
   },
 });
 
-const serviceAdapter = new GoogleGenerativeAIAdapter({
-  apiKey: process.env.GOOGLE_API_KEY,
-  model: process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite-preview",
-  apiVersion: "v1beta",
-});
+const provider = getConfiguredAiProvider();
+logAiProviderSelection("copilotkit");
+
+const serviceAdapter =
+  provider.name === "google"
+    ? new GoogleGenerativeAIAdapter({
+        apiKey: getGoogleStudioApiKey() || "missing-google-studio-api-key",
+        model: getGoogleStudioModel(),
+        apiVersion: "v1beta",
+      })
+    : provider.name === "openrouter"
+      ? new OpenAIAdapter({
+          model: getOpenRouterModel(),
+          openai: new OpenAI({
+            apiKey: getOpenRouterApiKey() || "missing-openrouter-api-key",
+            baseURL: getOpenRouterBaseUrl(),
+            defaultHeaders: getOpenRouterClientHeaders(),
+          }),
+        })
+      : new EmptyAdapter();
 
 const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
   runtime,
