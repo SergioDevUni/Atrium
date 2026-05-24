@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+.claude
+out
+coverage
+npm-debug.log*
+Dockerfile
+docker-compose.yml
+Caddyfile
+.dockerignore
+.env
+.env.*
+!.env.example
+!.env.production.example

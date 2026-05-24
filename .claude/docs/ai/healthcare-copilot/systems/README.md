@@ -53,6 +53,7 @@ Use [_template.md](./_template.md) as the default structure.
 - [new-entry-flow.md](./new-entry-flow.md) - Active `New Check` Body View with floating questions, body finding editing, and final review transition.
 - [atrium-intake-surface.md](./atrium-intake-surface.md) - Entry View and Body View UX shell that merges Atrium UI with AiThinkers healthcare logic.
 - [intake-guardrails.md](./intake-guardrails.md) - Scope redirects, question ledger, anti-repeat controls, and finite Atlas question loop.
+- [vps-deployment.md](./vps-deployment.md) - DigitalOcean Docker Compose deployment with a PM2-managed Next.js app and Caddy HTTPS proxy for a Namecheap domain.
 
 ## Task Lists
 

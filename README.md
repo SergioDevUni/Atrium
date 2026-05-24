@@ -129,6 +129,44 @@ OPENROUTER_APP_NAME=Atrium
 
 Google Studio takes priority when both Google and OpenRouter keys are present.
 
+## Production Deploy
+
+This project includes a Docker Compose setup for a DigitalOcean VPS:
+
+- `app` builds the Next.js standalone server and runs it with PM2.
+- `caddy` terminates HTTPS and reverse-proxies traffic to the app.
+- `.env.production` stores the production domain and AI provider keys.
+
+On the VPS:
+
+```bash
+git clone <your-repo-url>
+cd AiThinkers
+cp .env.production.example .env.production
+nano .env.production
+docker compose up -d --build
+```
+
+In `.env.production`, set:
+
+```env
+DOMAIN=your-namecheap-domain.com
+OPENROUTER_SITE_URL=https://your-namecheap-domain.com
+```
+
+Then point the Namecheap DNS `A` record for the domain or subdomain to the DigitalOcean droplet IP. Once DNS resolves to the droplet and ports `80` and `443` are open, Caddy requests and renews HTTPS certificates automatically.
+
+Useful production commands:
+
+```bash
+docker compose ps
+docker compose logs -f app
+docker compose logs -f caddy
+docker compose pull
+docker compose up -d --build
+docker compose down
+```
+
 ## Scripts
 
 ```bash
