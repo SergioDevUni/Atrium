@@ -129,6 +129,16 @@ OPENROUTER_APP_NAME=Atrium
 
 Google Studio takes priority when both Google and OpenRouter keys are present.
 
+Simple access gate:
+
+```env
+ATRIUM_LOGIN_USER=atrium
+ATRIUM_LOGIN_PASSWORD=workgate
+ATRIUM_AUTH_TOKEN=atrium-local-session
+```
+
+The login gate is a lightweight preview barrier, not a full user account system. Override these values in production.
+
 ## Production Deploy
 
 This project includes a Docker Compose setup for a DigitalOcean VPS:

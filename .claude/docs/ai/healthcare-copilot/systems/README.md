@@ -54,6 +54,7 @@ Use [_template.md](./_template.md) as the default structure.
 - [atrium-intake-surface.md](./atrium-intake-surface.md) - Entry View and Body View UX shell that merges Atrium UI with AiThinkers healthcare logic.
 - [intake-guardrails.md](./intake-guardrails.md) - Scope redirects, question ledger, anti-repeat controls, and finite Atlas question loop.
 - [vps-deployment.md](./vps-deployment.md) - DigitalOcean Docker Compose deployment with a PM2-managed Next.js app and Caddy HTTPS proxy for a Namecheap domain.
+- [access-gate.md](./access-gate.md) - Lightweight hardcoded login gate that protects Atrium pages and API routes during private preview.
 
 ## Task Lists
 
